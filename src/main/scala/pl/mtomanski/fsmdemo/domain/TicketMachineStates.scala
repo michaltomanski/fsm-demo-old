@@ -8,24 +8,12 @@ case object Idle extends TicketMachineState {
   override def identifier: String = "Idle"
 }
 
-case object FetchingDestinations extends TicketMachineState {
-  override def identifier: String = "FetchingDestinations"
-}
-
-case object WaitingForDestinationSelection extends TicketMachineState {
-  override def identifier: String = "WaitingForDestinationSelection"
-}
-
-case object WaitingForConnections extends TicketMachineState {
-  override def identifier: String = "WaitingForConnections"
+case object FetchingSoonestConnections extends TicketMachineState {
+  override def identifier: String = "FetchingSoonestConnections"
 }
 
 case object WaitingForConnectionSelection extends TicketMachineState {
   override def identifier: String = "WaitingForConnectionSelection"
-}
-
-case object WaitingForConfirmation extends TicketMachineState {
-  override def identifier: String = "WaitingForConfirmation"
 }
 
 case object WaitingForPayment extends TicketMachineState {

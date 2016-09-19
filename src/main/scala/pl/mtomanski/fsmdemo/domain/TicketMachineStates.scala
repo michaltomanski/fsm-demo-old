@@ -20,6 +20,6 @@ case object WaitingForPayment extends TicketMachineState {
   override def identifier: String = "WaitingForPayment"
 }
 
-case object PrintingTickets extends TicketMachineState {
+case object PrintingOutTickets extends TicketMachineState {
   override def identifier: String = "PrintingTickets"
 }

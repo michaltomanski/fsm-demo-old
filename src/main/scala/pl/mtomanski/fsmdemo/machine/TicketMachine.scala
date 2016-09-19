@@ -3,15 +3,18 @@ package pl.mtomanski.fsmdemo.machine
 import akka.actor.{ActorRef, Props}
 import akka.persistence.fsm.PersistentFSM
 import com.typesafe.config.ConfigFactory
-import pl.mtomanski.fsmdemo.actors.ConnectionActor.{FetchSoonestConnections, SoonestConnectionsForOrigin}
-import pl.mtomanski.fsmdemo.actors.GatewayActor.SoonestConnections
+import pl.mtomanski.fsmdemo.actors.ConnectionActor.{FetchSoonestConnections, SoonestConnectionsFromOrigin}
+import pl.mtomanski.fsmdemo.actors.GatewayActor.{PaymentFailed, SoonestConnections}
+import pl.mtomanski.fsmdemo.actors.PrintoutActor.{PrintOutFinished, PrintOutTicket}
 import pl.mtomanski.fsmdemo.actors.ReservationActor.{CancelReservation, MakeReservation}
 import pl.mtomanski.fsmdemo.domain.{ConnectionSelected, _}
 
 import scala.concurrent.duration._
 import scala.reflect._
 
-class TicketMachine(gatewayActor: ActorRef, connectionActor: ActorRef, reservationActor: ActorRef) extends PersistentFSM[TicketMachineState, TicketMachineContext, TicketMachineEvent] {
+class TicketMachine(gatewayActor: ActorRef, connectionActor: ActorRef,
+										reservationActor: ActorRef, printOutActor: ActorRef)
+	extends PersistentFSM[TicketMachineState, TicketMachineContext, TicketMachineEvent] {
 
 	//val reservationTimeout = ConfigFactory.load().getString("reservation-timeout")
 	val reservationTimeout = 2.seconds // todo props
@@ -24,7 +27,6 @@ class TicketMachine(gatewayActor: ActorRef, connectionActor: ActorRef, reservati
 				currentData match {
 					case ContextWithOrigin(id, origin) =>
 						ContextWithConnections(id, origin, connections)
-					case _ => ???
 				}
 			case ConnectionSelected(selectedConnection) =>
 				currentData match {
@@ -57,7 +59,7 @@ class TicketMachine(gatewayActor: ActorRef, connectionActor: ActorRef, reservati
 	}
 
 	when(FetchingSoonestConnections) {
-		case Event(SoonestConnectionsForOrigin(_, connections), data: ContextWithOrigin) =>
+		case Event(SoonestConnectionsFromOrigin(connections), data: ContextWithOrigin) =>
 			goto(WaitingForConnectionSelection) applying SoonestConnectionsFetched(connections)
 	}
 
@@ -67,14 +69,17 @@ class TicketMachine(gatewayActor: ActorRef, connectionActor: ActorRef, reservati
 	}
 
 	when(WaitingForPayment, reservationTimeout) {
-		case Event(PaymentSuccessfull(_, paymentId), data: ContextWithSelectedConnection) =>
-			goto(PrintingTickets) applying PaymentMade(paymentId)
+		case Event(PaymentSuccessful(paymentId), data: ContextWithSelectedConnection) =>
+			goto(PrintingOutTickets) applying PaymentMade(paymentId)
 		case Event(StateTimeout, _) =>
 			goto(FetchingSoonestConnections) applying ReservationTimeoutOccurred
 	}
 
-	when(PrintingTickets) {
-		case _ => ???
+	when(PrintingOutTickets) {
+		case Event(event @ PrintOutFinished(ticketNumber, connection), data: ContextWithPayment) =>
+			println(s"Ticket #$ticketNumber printed successfully")
+			gatewayActor ! event
+			stop()
 	}
 
 	whenUnhandled {
@@ -95,12 +100,18 @@ class TicketMachine(gatewayActor: ActorRef, connectionActor: ActorRef, reservati
 		case WaitingForConnectionSelection -> WaitingForPayment =>
 			nextStateData match {
 				case ContextWithSelectedConnection(_, _, selectedConnection) =>
-					reservationActor ! MakeReservation(selectedConnection.id)
+					reservationActor ! MakeReservation(selectedConnection)
 			}
 		case WaitingForPayment -> FetchingSoonestConnections =>
 			stateData match {
-				case ContextWithSelectedConnection(_, origin, selectedConnection) =>
-					reservationActor ! CancelReservation(selectedConnection.id)
+				case ContextWithSelectedConnection(_, _, selectedConnection) =>
+					reservationActor ! CancelReservation(selectedConnection)
+					gatewayActor ! PaymentFailed(selectedConnection)
+			}
+		case WaitingForPayment -> PrintingOutTickets =>
+			nextStateData match {
+				case ContextWithPayment(_, _, connection, _) =>
+					printOutActor ! PrintOutTicket(connection)
 			}
 	}
 
@@ -110,5 +121,7 @@ class TicketMachine(gatewayActor: ActorRef, connectionActor: ActorRef, reservati
 }
 
 object TicketMachine {
-	def props(gatewayActor: ActorRef, connectionActor: ActorRef, reservationActor: ActorRef): Props = Props(new TicketMachine(gatewayActor, connectionActor, reservationActor))
+	def props(gatewayActor: ActorRef, connectionActor: ActorRef, reservationActor: ActorRef,
+						printOutActor: ActorRef): Props =
+		Props(new TicketMachine(gatewayActor, connectionActor, reservationActor, printOutActor))
 }

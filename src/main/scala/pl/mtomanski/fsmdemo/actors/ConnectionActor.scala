@@ -3,7 +3,7 @@ package pl.mtomanski.fsmdemo.actors
 import java.util.UUID
 
 import akka.actor.{Actor, Props}
-import pl.mtomanski.fsmdemo.actors.ConnectionActor.{FetchSoonestConnections, SoonestConnectionsForOrigin}
+import pl.mtomanski.fsmdemo.actors.ConnectionActor._
 import pl.mtomanski.fsmdemo.domain.{Connection, Destination, Origin}
 
 class ConnectionActor extends Actor {
@@ -14,7 +14,11 @@ class ConnectionActor extends Actor {
   }
 
   private def getSoonestConnections(origin: Origin) = {
-    SoonestConnectionsForOrigin(origin, ConnectionActor.connections)
+    val soonestConnections = Seq(
+      Connection("1", origin, destination1, departure1),
+      Connection("2", origin, destination2, departure2)
+    )
+    SoonestConnectionsFromOrigin(soonestConnections)
   }
 }
 
@@ -24,12 +28,11 @@ object ConnectionActor {
 
   case class FetchSoonestConnections(origin: Origin)
 
-  case class SoonestConnectionsForOrigin(origin: Origin, connections: Seq[Connection])
+  case class SoonestConnectionsFromOrigin(connections: Seq[Connection])
 
   // Mocked
   val destination1 = Destination(UUID.randomUUID().toString, "Wroclaw")
   val destination2 = Destination(UUID.randomUUID().toString, "Warsaw")
-  val connection1 = Connection(UUID.randomUUID().toString, destination1, "18:15")
-  val connection2 = Connection(UUID.randomUUID().toString, destination1, "18:30")
-  val connections = Seq(connection1, connection2)
+  val departure1 = "18:15"
+  val departure2 = "18:30"
 }
